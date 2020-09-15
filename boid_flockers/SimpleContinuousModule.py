@@ -29,4 +29,5 @@ class SimpleCanvas(VisualizationElement):
             portrayal["x"] = x
             portrayal["y"] = y
             space_state.append(portrayal)
+            
         return space_state
