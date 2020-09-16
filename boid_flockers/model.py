@@ -10,6 +10,7 @@ from mesa.space import ContinuousSpace
 from mesa.time import RandomActivation
 from mesa.datacollection import DataCollector
 from .boid import Boid
+import traceback
 
 def compute_N(model):
     try:
@@ -99,9 +100,7 @@ class BoidFlockers(Model):
         vision=10,
         separation=2,
         rate = 10,
-        size_factor = 2
-        
-    ):
+        size_factor = 2):
         """
         Create a new Flockers model.
 
@@ -124,6 +123,7 @@ class BoidFlockers(Model):
         self.running = True
         self.rate = rate
         self.kill_agents = []
+        self.queue = []
         self.input_rate = 0
         self.num_agents = 0
         self.running = True
@@ -151,16 +151,32 @@ class BoidFlockers(Model):
                                'def_speed':'speed',
                                'sep':'separation'})
         
-        
-    def make_agents(self):
-            x = self.space.x_max/2 + np.random.uniform(-1,1) * self.space.x_max/2/self.size_factor
-            y = self.space.y_max/2 + np.random.uniform(-1,1) * self.space.y_max/2/self.size_factor
+    def make_od(self):
+    
+            x = self.space.x_max/2 + np.random.uniform(-1,1)\
+                * self.space.x_max/2/self.size_factor
+            y = self.space.y_max/2 + np.random.uniform(-1,1)\
+                * self.space.y_max/2/self.size_factor
             pos = np.array((x, y))
             
-            x_dest = self.space.x_max/2 + np.random.uniform(-1,1) * self.space.x_max/2/self.size_factor
-            y_dest = self.space.y_max/2 + np.random.uniform(-1,1) * self.space.y_max/2/self.size_factor
+            x_dest = self.space.x_max/2 + np.random.uniform(-1,1) \
+                * self.space.x_max/2/self.size_factor
+            y_dest = self.space.y_max/2 + np.random.uniform(-1,1) \
+                * self.space.y_max/2/self.size_factor
             dest = np.array((x_dest, y_dest))
             
+            return pos,dest
+        
+    def make_agents(self, od):
+            # x = self.space.x_max/2 + np.random.uniform(-1,1) * self.space.x_max/2/self.size_factor
+            # y = self.space.y_max/2 + np.random.uniform(-1,1) * self.space.y_max/2/self.size_factor
+            # pos = np.array((x, y))
+            
+            # x_dest = self.space.x_max/2 + np.random.uniform(-1,1) * self.space.x_max/2/self.size_factor
+            # y_dest = self.space.y_max/2 + np.random.uniform(-1,1) * self.space.y_max/2/self.size_factor
+            # dest = np.array((x_dest, y_dest))
+            pos = od[0]
+            dest = od[1]            
             velocity = np.random.random(2) * 2 - 1
             
             boid = Boid(
@@ -173,8 +189,11 @@ class BoidFlockers(Model):
                 vision=self.vision,
                 separation=self.separation,
             )
-            self.space.place_agent(boid, pos)
-            self.schedule.add(boid)
+            return boid
+
+    def place_boid(self, boid):
+        self.space.place_agent(boid, boid.pos)
+        self.schedule.add(boid)
         
     def step(self):
         """
@@ -182,29 +201,54 @@ class BoidFlockers(Model):
         """
         
         #collect data
+        # try:
         try:
-            try:
-                self.datacollector.collect(self)
-
-            except: pass
-            #compute input rate for step
-            per_step = self.rate/60
-            fractional = per_step % 1
-            integer = int(per_step - round(fractional))
-            num_frac = np.random.binomial(size=1, n=1, p= fractional)
-            self.input_rate = int(integer+num_frac)
-            #create agents
-            for i in range(self.input_rate):
-                self.make_agents()
-                self.unique_id += 1
+            self.datacollector.collect(self)
+        except: 
+            pass
+        #compute input rate for step
+        per_step = self.rate/60
+        fractional = per_step % 1
+        integer = int(per_step - round(fractional))
+        num_frac = np.random.binomial(size=1, n=1, p= fractional)
+        self.input_rate = int(integer+num_frac)
+        #create agents
+       
+        for i in range(self.input_rate):
+            
+            od = self.make_od()
+            agent = self.make_agents(od)
+            self.unique_id += 1
+            
+            if self.num_agents >= 1:
+                neighbors = self.space.get_neighbors(od[0], self.separation, False)
+                if len(neighbors) == 0:
+                    self.place_boid(agent)
+                    self.num_agents += 1
+                else:
+                    self.queue.append(agent)
+                    
+            if self.num_agents == 0: 
+                self.place_boid(agent)
                 self.num_agents += 1
-            self.kill_agents = []
-            #make 1 step
-            self.schedule.step()
-            #remove agents that arrived at their destinations
-            for i in self.kill_agents:
-                self.schedule.remove(i)
-                self.num_agents -= 1
-                self.space.remove_agent(i)
-                
-        except: print('cant make steps!')
+
+        for agent in self.queue:
+            od = agent.pos
+            neighbors = self.space.get_neighbors(od[0], self.separation, False)
+            if neighbors == 0:
+                self.place_boid(agent)
+                self.num_agents += 1
+                self.queue.remove(agent)
+            else:
+                pass
+        print(len(self.queue))
+        self.kill_agents = []
+        #make 1 step
+        self.schedule.step()
+        #remove agents that arrived at their destinations
+        for i in self.kill_agents:
+            self.schedule.remove(i)
+            self.num_agents -= 1
+            self.space.remove_agent(i)
+            
+        # except: print('cant make steps!')
