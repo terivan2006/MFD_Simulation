@@ -27,7 +27,9 @@ class Boid(Agent):
         velocity,
         vision,
         separation,
-        destination = np.zeros(2)
+        destination = np.zeros(2),
+        init_time = 0,
+        entry_time = 0
     ):
         """
         Create a new Boid flocker agent.
@@ -51,13 +53,19 @@ class Boid(Agent):
         self.velocity = velocity
         self.vision = vision
         self.separation = separation
-                
+        self.od_dist = 0
         self.previos_distance = 0
         self.current_distance = 0
         self.destination = destination
         self.effective_speed = speed
         self.physic_speed = speed
         
+        self.init_time = init_time
+        self.entry_time = entry_time
+        self.current_time = self.model.schedule.time 
+        self.freeflow_endtime = 0
+        self.dep_del = 0
+        self.tot_del = 0
         
     def direct(self):
         towards_dest = self.model.space.get_heading(self.pos, self.destination)
@@ -99,6 +107,7 @@ class Boid(Agent):
         Get the Boid's neighbors, compute the new vector, and move accordingly.
         """
         try:
+            self.current_time = self.model.schedule.time
             self.previos_distance = self.distance()
             neighbors = self.model.space.get_neighbors(self.pos, self.vision, False)
             self.velocity =  self.direct()/np.linalg.norm(self.direct())*self.speed
@@ -116,6 +125,12 @@ class Boid(Agent):
             self.current_distance = self.distance()
             self.effective_speed = self.previos_distance - self.current_distance
             
+            self.freeflow_endtime = self.entry_time + self.od_dist/self.speed
+            self.enroute_del = max(self.current_time - self.freeflow_endtime, 0)
+            
+            
+            self.tot_del = self.enroute_del + self.dep_del
+
             if self.distance() <= self.speed:
                 self.model.kill_agents.append(self)
         except: print(self.unique_id, 'something went wrong!')

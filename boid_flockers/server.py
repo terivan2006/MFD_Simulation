@@ -79,7 +79,19 @@ chart_3 = ChartModule([ {"Label": "Effective speed",
                        "Color": "Green"}],
                     data_collector_name='datacollector')
 
+chart_4 = ChartModule([ {"Label": "Departure Delay",
+                       "Color": "Blue"},
+                      {"Label": "Enroute Delay",
+                       "Color": "Green"},
+                      {"Label": "Total Delay",
+                       "Color": "Red"}],
+                    data_collector_name='datacollector')
+
 chart_5 = ChartModule([  {"Label": "Output rate",
+                       "Color": "Blue"}],
+                    data_collector_name='datacollector')
+
+chart_6 = ChartModule([  {"Label": "Queue length",
                        "Color": "Blue"}],
                     data_collector_name='datacollector')
 
@@ -87,4 +99,6 @@ server = ModularServer(BoidFlockers, [boid_canvas,
                                       chart_1,
                                       chart_2,
                                       chart_3,
-                                      chart_5,], "Boids", model_params)
+                                      chart_4,
+                                      chart_5,
+                                      chart_6], "Boids", model_params)

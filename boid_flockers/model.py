@@ -10,7 +10,6 @@ from mesa.space import ContinuousSpace
 from mesa.time import RandomActivation
 from mesa.datacollection import DataCollector
 from .boid import Boid
-import traceback
 
 def compute_N(model):
     try:
@@ -87,6 +86,9 @@ def compute_eff_speed(model):
         return eff_speed
     except: print('effective speed error')
 
+def compute_queue_len(model):
+    return len(model.queue)
+
 class BoidFlockers(Model):
     """
     Flocker model class. Handles agent creation, placement and scheduling.
@@ -100,7 +102,8 @@ class BoidFlockers(Model):
         vision=10,
         separation=2,
         rate = 10,
-        size_factor = 2):
+        size_factor = 2,
+        sim_length = 120):
         """
         Create a new Flockers model.
 
@@ -128,6 +131,12 @@ class BoidFlockers(Model):
         self.num_agents = 0
         self.running = True
         
+        self.dep_del = 0
+        self.enroute_del = 0
+        self.tot_del = self.dep_del + self.enroute_del
+        
+        self.sim_length = sim_length
+        
         self.datacollector = DataCollector(
             model_reporters= {"Occupancy": compute_N,
                               "Total flow": compute_flow,
@@ -136,11 +145,15 @@ class BoidFlockers(Model):
                               "Output rate": compute_out,
                               'Effective speed': compute_eff_speed ,
                               'Speed': compute_speed,
+                              'Queue length': compute_queue_len,
                               'size':'size_factor',
                               'inp_rate':'rate',
                               'vision':'vision',
                               'def_speed':'speed',
-                              'sep':'separation'
+                              'sep':'separation',
+                              'Departure Delay':'dep_del',
+                              'Enroute Delay': 'enroute_del',
+                              'Total Delay': 'tot_del'
                              },
             
             agent_reporters = {'id':'unique_id',
@@ -149,7 +162,10 @@ class BoidFlockers(Model):
                                'phys_speed':'physic_speed',
                                'vision':'vision',
                                'def_speed':'speed',
-                               'sep':'separation'})
+                               'sep':'separation',
+                               'Departure Delay':'dep_del',
+                              'Enroute Delay': 'enroute_del',
+                              'Total Delay': 'tot_del'})
         
     def make_od(self):
     
@@ -167,14 +183,8 @@ class BoidFlockers(Model):
             
             return pos,dest
         
-    def make_agents(self, od):
-            # x = self.space.x_max/2 + np.random.uniform(-1,1) * self.space.x_max/2/self.size_factor
-            # y = self.space.y_max/2 + np.random.uniform(-1,1) * self.space.y_max/2/self.size_factor
-            # pos = np.array((x, y))
-            
-            # x_dest = self.space.x_max/2 + np.random.uniform(-1,1) * self.space.x_max/2/self.size_factor
-            # y_dest = self.space.y_max/2 + np.random.uniform(-1,1) * self.space.y_max/2/self.size_factor
-            # dest = np.array((x_dest, y_dest))
+    def make_agents(self, od, init_time):
+
             pos = od[0]
             dest = od[1]            
             velocity = np.random.random(2) * 2 - 1
@@ -188,6 +198,7 @@ class BoidFlockers(Model):
                 destination = dest,
                 vision=self.vision,
                 separation=self.separation,
+                init_time = init_time
             )
             return boid
 
@@ -195,18 +206,7 @@ class BoidFlockers(Model):
         self.space.place_agent(boid, boid.pos)
         self.schedule.add(boid)
         
-    def step(self):
-        """
-        Create agents here
-        """
-        
-        #collect data
-        # try:
-        try:
-            self.datacollector.collect(self)
-        except: 
-            pass
-        #compute input rate for step
+    def agent_maker(self):
         per_step = self.rate/60
         fractional = per_step % 1
         integer = int(per_step - round(fractional))
@@ -215,38 +215,64 @@ class BoidFlockers(Model):
         #create agents
        
         for i in range(self.input_rate):
-            
             od = self.make_od()
-            agent = self.make_agents(od)
+            agent = self.make_agents(od, init_time = self.schedule.time)
+            agent.od_dist = agent.distance()
             self.unique_id += 1
             
             if self.num_agents >= 1:
                 neighbors = self.space.get_neighbors(od[0], self.separation, False)
                 if len(neighbors) == 0:
+                    agent.entry_time = self.schedule.time
                     self.place_boid(agent)
                     self.num_agents += 1
+                    print('first attempt!')
                 else:
                     self.queue.append(agent)
                     
             if self.num_agents == 0: 
+                agent.entry_time = self.schedule.time
                 self.place_boid(agent)
                 self.num_agents += 1
-
-        for agent in self.queue:
+            
+            
+    def queue_clearer(self, time):
+        for index, agent in enumerate(self.queue):
             od = agent.pos
+            print(od)
             neighbors = self.space.get_neighbors(od[0], self.separation, False)
-            if neighbors == 0:
+            if len(neighbors) == 0:
+                agent.entry_time = time
+                agent.dep_del = max(agent.entry_time - agent.init_time,0)
+                print('second attempt!',agent.unique_id,agent.init_time, agent.entry_time, agent.dep_del)
+                self.dep_del += agent.dep_del
                 self.place_boid(agent)
                 self.num_agents += 1
-                self.queue.remove(agent)
+                del self.queue[index]
             else:
                 pass
-        print(len(self.queue))
+        
+    def step(self):
+        """
+        Create agents here
+        """
+        #collect data
+        # try:
+        try:
+            self.datacollector.collect(self)
+        except: 
+            pass
+        #compute input rate for step
+        if self.schedule.time <self.sim_length:
+            self.agent_maker()
+        else: pass
+        self.queue_clearer(time= self.schedule.time)
         self.kill_agents = []
         #make 1 step
         self.schedule.step()
         #remove agents that arrived at their destinations
         for i in self.kill_agents:
+            self.enroute_del += i.enroute_del
             self.schedule.remove(i)
             self.num_agents -= 1
             self.space.remove_agent(i)
