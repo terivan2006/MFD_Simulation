@@ -9,7 +9,7 @@ from mesa import Model
 from mesa.space import ContinuousSpace
 from mesa.time import RandomActivation
 from mesa.datacollection import DataCollector
-from .boid import Boid
+from boid import Boid
 
 def compute_N(model):
     try:
@@ -50,6 +50,7 @@ def compute_flow(model):
                     agent.pos[1] >= model.space.y_max/2 - \
                     model.space.y_max/2/model.size_factor ])
     return flow
+
 def compute_inp(model):
     inp = model.input_rate
     return inp*60
@@ -129,7 +130,12 @@ class BoidFlockers(Model):
         self.queue = []
         self.input_rate = 0
         self.num_agents = 0
-        self.running = True
+        
+        self.arrival = 0
+        self.departure = 0
+        
+        self.n_confs = 0
+        self.n_intrusion = 0
         
         self.dep_del = 0
         self.enroute_del = 0
@@ -153,7 +159,12 @@ class BoidFlockers(Model):
                               'sep':'separation',
                               'Departure Delay':'dep_del',
                               'Enroute Delay': 'enroute_del',
-                              'Total Delay': 'tot_del'
+                              'Total Delay': 'tot_del',
+                              'N Conflicts': 'n_confs',
+                              'N Intrusions': 'n_intrusion',
+                              'N Arrivals': 'arrival',
+                              'N Departures': 'departure'
+                              
                              },
             
             agent_reporters = {'id':'unique_id',
@@ -225,6 +236,7 @@ class BoidFlockers(Model):
                 if len(neighbors) == 0:
                     agent.entry_time = self.schedule.time
                     self.place_boid(agent)
+                    self.arrival += 1
                     self.num_agents += 1
                     print('first attempt!')
                 else:
@@ -233,20 +245,22 @@ class BoidFlockers(Model):
             if self.num_agents == 0: 
                 agent.entry_time = self.schedule.time
                 self.place_boid(agent)
+                self.arrival += 1
                 self.num_agents += 1
             
             
     def queue_clearer(self, time):
         for index, agent in enumerate(self.queue):
             od = agent.pos
-            print(od)
+            # print(od)
             neighbors = self.space.get_neighbors(od[0], self.separation, False)
             if len(neighbors) == 0:
                 agent.entry_time = time
-                agent.dep_del = max(agent.entry_time - agent.init_time,0)
-                print('second attempt!',agent.unique_id,agent.init_time, agent.entry_time, agent.dep_del)
-                self.dep_del += agent.dep_del
+                # agent.dep_del = max(agent.entry_time - agent.init_time,0)
+                # print('second attempt!',agent.unique_id,agent.init_time, agent.entry_time, agent.dep_del)
+                self.dep_del += agent.entry_time - agent.init_time
                 self.place_boid(agent)
+                self.arrival += 1
                 self.num_agents += 1
                 del self.queue[index]
             else:
@@ -258,10 +272,9 @@ class BoidFlockers(Model):
         """
         #collect data
         # try:
-        try:
-            self.datacollector.collect(self)
-        except: 
-            pass
+        self.n_confs = 0
+        self.n_intrusion = 0
+        
         #compute input rate for step
         if self.schedule.time <self.sim_length:
             self.agent_maker()
@@ -271,10 +284,16 @@ class BoidFlockers(Model):
         #make 1 step
         self.schedule.step()
         #remove agents that arrived at their destinations
+        self.departure += len(self.kill_agents)
+        
         for i in self.kill_agents:
             self.enroute_del += i.enroute_del
             self.schedule.remove(i)
             self.num_agents -= 1
             self.space.remove_agent(i)
-            
+        try:
+            self.datacollector.collect(self)
+        except: 
+            pass
+        print(self.n_confs,self.n_intrusion)
         # except: print('cant make steps!')

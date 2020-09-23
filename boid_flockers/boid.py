@@ -64,8 +64,9 @@ class Boid(Agent):
         self.entry_time = entry_time
         self.current_time = self.model.schedule.time 
         self.freeflow_endtime = 0
-        self.dep_del = 0
-        self.tot_del = 0
+        
+        self.n_conf = 0
+        self.n_intrusion = 0
         
     def direct(self):
         towards_dest = self.model.space.get_heading(self.pos, self.destination)
@@ -75,7 +76,10 @@ class Boid(Agent):
     def mvp(self, neighbor):
         #compute relative position w.r.t intruder
         x,y = self.pos-neighbor.pos
-       # dist_intruder = np.sqrt(x**2 + y**2)
+        dist_intruder = np.sqrt(x**2 + y**2)
+        if dist_intruder < self.separation/2:
+            self.model.n_intrusion += 1
+        else: pass
         v_x,v_y = self.velocity - neighbor.velocity
         m = -v_y/(v_x) 
         b = y + x*v_y/(v_x)
@@ -85,6 +89,7 @@ class Boid(Agent):
         dist_closest = np.sqrt(c_x**2 + c_y**2)
         
         if dist_closest < self.separation:
+            self.model.n_confs += 1
             time_closest = (dist_closest)/self.speed
             factor = self.separation/(dist_closest) 
             co = np.array([c_x*factor,c_y*factor])
@@ -107,6 +112,8 @@ class Boid(Agent):
         Get the Boid's neighbors, compute the new vector, and move accordingly.
         """
         try:
+            self.n_conf = 0
+            self.n_intrusion = 0
             self.current_time = self.model.schedule.time
             self.previos_distance = self.distance()
             neighbors = self.model.space.get_neighbors(self.pos, self.vision, False)
@@ -128,8 +135,6 @@ class Boid(Agent):
             self.freeflow_endtime = self.entry_time + self.od_dist/self.speed
             self.enroute_del = max(self.current_time - self.freeflow_endtime, 0)
             
-            
-            self.tot_del = self.enroute_del + self.dep_del
 
             if self.distance() <= self.speed:
                 self.model.kill_agents.append(self)
