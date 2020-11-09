@@ -73,32 +73,59 @@ class Boid(Agent):
         return towards_dest
     
     
-    def mvp(self, neighbor):
-        #compute relative position w.r.t intruder
-        x,y = self.pos-neighbor.pos
-        dist_intruder = np.sqrt(x**2 + y**2)
-        if dist_intruder < self.separation/2:
-            self.model.n_intrusion += 1
-        else: pass
-        v_x,v_y = self.velocity - neighbor.velocity
-        m = -v_y/(v_x) 
-        b = y + x*v_y/(v_x)
-        c_x = -m*b/(m**2 + 1)
-        c_y = b/(m**2 + 1)
-        #min distance from intruder
-        dist_closest = np.sqrt(c_x**2 + c_y**2)
+    # def mvp(self, neighbor):
+    #     #compute relative position w.r.t intruder
+    #     x,y = self.pos-neighbor.pos
+    #     dist_intruder = np.sqrt(x**2 + y**2)
+    #     if dist_intruder < self.separation/2:
+    #         self.model.n_intrusion += 1
+    #     else: pass
+    #     v_x,v_y = self.velocity - neighbor.velocity
+    #     m = -v_y/(v_x) 
+    #     b = y + x*v_y/(v_x)
+    #     c_x = -m*b/(m**2 + 1)
+    #     c_y = b/(m**2 + 1)
+    #     #min distance from intruder
+    #     dist_closest = np.sqrt(c_x**2 + c_y**2)
         
-        if dist_closest < self.separation:
-            self.model.n_confs += 1
+    #     if dist_closest < self.separation:
+    #         self.model.n_confs += 1
+    #         time_closest = (dist_closest)/self.speed
+    #         factor = self.separation/(dist_closest) 
+    #         co = np.array([c_x*factor,c_y*factor])
+    #         delta_velocity = co/(time_closest)
+    #     else:
+    #         delta_velocity = np.zeros(2)
+    #     return(delta_velocity)
+        
+    def mvp(self, neighbors):
+        #compute relative position w.r.t intruder
+        try:
+            npos = np.array([x.pos for x in neighbors])
+            nvel  = np.array([x.velocity for x in neighbors])
+            x,y = (self.pos-npos)[:,0],(self.pos-npos)[:,1]
+            
+            dist_intruder = np.sqrt(x**2 + y**2)
+            self.model.n_intrusion += int(sum((dist_intruder <= self.separation/2)*1))
+            v_x,v_y = (self.velocity - nvel)[:,0],(self.velocity - nvel)[:,1]
+            m = -v_y/(v_x) 
+            b = y + x*v_y/(v_x)
+            c_x = -m*b/(m**2 + 1)
+            c_y = b/(m**2 + 1)
+            #min distance from intruder
+            dist_closest = np.sqrt(c_x**2 + c_y**2)
+            
+            sep = (dist_closest <= self.separation)*1
+            self.model.n_confs += int(sum(sep))
             time_closest = (dist_closest)/self.speed
             factor = self.separation/(dist_closest) 
-            co = np.array([c_x*factor,c_y*factor])
+            co = np.array([c_x*factor,
+                            c_y*factor])
             delta_velocity = co/(time_closest)
-        else:
-            delta_velocity = np.zeros(2)
-        return(delta_velocity)
-        
 
+            return(delta_velocity.sum(axis=1))
+        except: return np.array((0,0))
+    
     def distance(self):
         x1, y1 = self.pos
         x2, y2 = self.destination
@@ -118,15 +145,17 @@ class Boid(Agent):
             self.previos_distance = self.distance()
             
             neighbors = self.model.space.get_neighbors(self.pos, self.vision, False)
+
             self.velocity =  self.direct()/np.linalg.norm(self.direct())*self.speed
-            for neighbor in neighbors:
-                self.velocity += self.mvp(neighbor)
+            
+            self.velocity += self.mvp(neighbors)
+            # for neighbor in neighbors:
+                # self.velocity += 0#self.mvp(neighbor)
             
             self.velocity /= np.linalg.norm(self.velocity)
+            
             # if np.linalg.norm(self.velocity) > self.speed:
-                
             #     self.velocity /= np.linalg.norm(self.velocity)
-                
             # else: pass
 
             new_pos = self.pos + self.velocity*self.speed

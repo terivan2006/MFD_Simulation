@@ -48,7 +48,7 @@ model_params = {
     "width": 100,
     "height": 100,
     "speed": UserSettableParameter(
-        "slider", "Speed", 1, 0, 10, 0.1
+        "number", "Speed", 1, 0, 10, 0.1
     ),
     "vision": UserSettableParameter(
         "slider", "Vision", 10, 0, 100, 1
@@ -57,10 +57,16 @@ model_params = {
         "slider", "Separation", 2, 0, 10,0.1
     ),
     "rate": UserSettableParameter(
-        "slider", "Input rate", 10, 0, 1000, 0.1
+        "number", "Input rate", 10, 0, 1000, 0.1
     ),
     "size_factor": UserSettableParameter(
         "slider", "Size factor", 2, 1, 10, 0.1
+    ),
+    "angle_min": UserSettableParameter(
+        "slider", "Direction minimum", -180, -180, 180, 0.1
+    ),
+    "angle_max": UserSettableParameter(
+        "slider", "Direction maximum", 180, -180, 180, 0.1
     )
 }
 
@@ -98,7 +104,7 @@ chart_5 = ChartModule([  {"Label": "N Arrivals",
 chart_7 = ChartModule([  {"Label": "N Conflicts",
                        "Color": "Blue"},
                        {"Label": "N Intrusions",
-                       "Color": "Blue"}],
+                       "Color": "Red"}],
                     data_collector_name='datacollector')
 
 server = ModularServer(BoidFlockers, [boid_canvas, 

@@ -9,7 +9,7 @@ from mesa import Model
 from mesa.space import ContinuousSpace
 from mesa.time import RandomActivation
 from mesa.datacollection import DataCollector
-from boid import Boid
+from .boid import Boid
 
 def compute_N(model):
     try:
@@ -104,7 +104,9 @@ class BoidFlockers(Model):
         separation=2,
         rate = 10,
         size_factor = 2,
-        sim_length = 1200):
+        sim_length = 1200,
+        angle_min = -180,
+        angle_max = 180):
         """
         Create a new Flockers model.
 
@@ -124,6 +126,10 @@ class BoidFlockers(Model):
         self.schedule = RandomActivation(self)
         self.space = ContinuousSpace(width, height, False)
         self.size_factor = size_factor
+        
+        self.angle_min = angle_min
+        self.angle_max = angle_max
+        
         self.running = True
         self.rate = rate
         self.kill_agents = []
@@ -166,17 +172,16 @@ class BoidFlockers(Model):
                               'N Departures': 'departure'
                               
                              },
-            
             agent_reporters = {'id':'unique_id',
-                               'prev_dist':'previos_distance',
-                               'cur_dist':'current_distance',
-                               'phys_speed':'physic_speed',
-                               'vision':'vision',
-                               'def_speed':'speed',
-                               'sep':'separation',
-                               'Departure Delay':'dep_del',
-                              'Enroute Delay': 'enroute_del',
-                              'Total Delay': 'tot_del'})
+                                'prev_dist':'previos_distance',
+                                'cur_dist':'current_distance',
+                                'phys_speed':'physic_speed',
+                                'vision':'vision',
+                                'def_speed':'speed',
+                                'sep':'separation',
+                                'x': lambda x: x.pos[0],
+                                'y': lambda x: x.pos[1]}
+            )
         
     def make_od(self):
     
@@ -185,14 +190,36 @@ class BoidFlockers(Model):
             y = self.space.y_max/2 + np.random.uniform(-1,1)\
                 * self.space.y_max/2/self.size_factor
             pos = np.array((x, y))
-            
             x_dest = self.space.x_max/2 + np.random.uniform(-1,1) \
                 * self.space.x_max/2/self.size_factor
             y_dest = self.space.y_max/2 + np.random.uniform(-1,1) \
                 * self.space.y_max/2/self.size_factor
             dest = np.array((x_dest, y_dest))
-            
             return pos,dest
+        
+    def make_od2(self):
+        
+        valid = False
+        while valid == False:
+                x = self.space.x_max/2 + np.random.uniform(-1,1)\
+                    * self.space.x_max/2/self.size_factor
+                y = self.space.y_max/2 + np.random.uniform(-1,1)\
+                    * self.space.y_max/2/self.size_factor
+                pos = np.array((x, y))
+                
+                x_dest = self.space.x_max/2 + np.random.uniform(-1,1) \
+                    * self.space.x_max/2/self.size_factor
+                y_dest = self.space.y_max/2 + np.random.uniform(-1,1) \
+                    * self.space.y_max/2/self.size_factor
+                dest = np.array((x_dest, y_dest))
+                
+                vector = (dest - pos)/np.linalg.norm((dest - pos))
+                angle = np.arctan2(vector[0],vector[1]) * 180 / np.pi
+                
+                if angle >= self.angle_min and angle <= self.angle_max:
+                    valid =True
+                else: continue
+        return pos, dest
         
     def make_agents(self, od, init_time):
 
@@ -226,7 +253,7 @@ class BoidFlockers(Model):
         #create agents
        
         for i in range(self.input_rate):
-            od = self.make_od()
+            od = self.make_od2()
             agent = self.make_agents(od, init_time = self.schedule.time)
             agent.od_dist = agent.distance()
             self.unique_id += 1
@@ -295,5 +322,3 @@ class BoidFlockers(Model):
             self.datacollector.collect(self)
         except: 
             pass
-        #print(self.n_confs,self.n_intrusion)
-        # except: print('cant make steps!')
